@@ -6,6 +6,10 @@ class DataCounterOutputTest < Test::Unit::TestCase
     Fluent::Test.setup
   end
 
+  def config_element(name = 'test', argument = '', params = {}, elements = [])
+    Fluent::Config::Element.new(name, argument, params, elements)
+  end
+
   CONFIG = %[
     unit minute
     aggregate tag
@@ -92,7 +96,7 @@ class DataCounterOutputTest < Test::Unit::TestCase
       pattern1 ok ^2\\d\\d$
     ]
     assert_equal d1.instance.tick, d2.instance.tick
-    
+
     d = create_driver %[
       count_interval 5m
       count_key field
@@ -353,11 +357,11 @@ class DataCounterOutputTest < Test::Unit::TestCase
     assert_equal 60, r1['tag1_status4xx_count']
     assert_equal 1.0, r1['tag1_status4xx_rate']
     assert_equal 25.0, r1['tag1_status4xx_percentage']
-    
+
     assert_equal 60, r1['tag1_unmatched_count']
     assert_equal 1.0, r1['tag1_unmatched_rate']
     assert_equal 25.0, r1['tag1_unmatched_percentage']
-    
+
     assert_equal 0, r1['tag1_status3xx_count']
     assert_equal 0.0, r1['tag1_status3xx_rate']
     assert_equal 0.0, r1['tag1_status3xx_percentage']
@@ -469,11 +473,11 @@ class DataCounterOutputTest < Test::Unit::TestCase
     assert_equal 60, r['status4xx_count']
     assert_equal 1.0, r['status4xx_rate']
     assert_equal 25.0, r['status4xx_percentage']
-    
+
     assert_equal 60, r['unmatched_count']
     assert_equal 1.0, r['unmatched_rate']
     assert_equal 25.0, r['unmatched_percentage']
-    
+
     assert_equal 0, r['status3xx_count']
     assert_equal 0.0, r['status3xx_rate']
     assert_equal 0.0, r['status3xx_percentage']
@@ -661,8 +665,28 @@ class DataCounterOutputTest < Test::Unit::TestCase
     file = "#{dir}/test.dat"
     File.unlink file if File.exist? file
 
+    config = {
+      "unit" =>  "minute",
+      "aggregate" => "tag",
+      "input_tag_remove_prefix" => "test",
+      "count_key" =>  " target",
+      "pattern1" => "status2xx ^2\\d\\d$",
+      "pattern2" => "status3xx ^3\\d\\d$",
+      "pattern3" => "status4xx ^4\\d\\d$",
+      "pattern4" => "status5xx ^5\\d\\d$",
+      "store_storage" => true
+    }
+    conf = config_element('ROOT', '', config, [
+                            config_element(
+                              'storage', '',
+                              {'@type' => 'local',
+                               '@id' => 'test-01',
+                               'path' => "#{file}",
+                               'persistent' => true,
+                               })
+                           ])
     # test store
-    d = create_driver(CONFIG + %[store_file #{file}])
+    d = create_driver(conf)
     d.run(default_tag: 'test.input') do
       d.instance.flush_emit(60)
       d.feed({'target' => 1})
@@ -676,7 +700,7 @@ class DataCounterOutputTest < Test::Unit::TestCase
     assert File.exist? file
 
     # test load
-    d = create_driver(CONFIG + %[store_file #{file}])
+    d = create_driver(conf)
     d.run(default_tag: 'test.input') do
       loaded_counts = d.instance.counts
       loaded_saved_at = d.instance.saved_at
